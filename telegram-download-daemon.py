@@ -13,6 +13,7 @@ import string
 import os.path
 from mimetypes import guess_extension
 
+
 from sessionManager import getSession, saveSession
 
 from telethon import TelegramClient, events, __version__
@@ -120,8 +121,7 @@ async def sendHelloMessage(client, peerChannel):
     entity = await client.get_entity(peerChannel)
     print("Telegram Download Daemon "+TDD_VERSION+" using Telethon "+__version__)
     print("  Simultaneous downloads:"+str(worker_count))
-    await client.send_message(entity, "Telegram Download Daemon "+TDD_VERSION+" using Telethon "+__version__)
-    await client.send_message(entity, "Hi! Ready for your files!")
+    await client.send_message(entity, "Telegram Download Daemon "+TDD_VERSION+" using Telethon "+__version__+"\nMod By SunLaria")
  
 
 async def log_reply(message, reply):
@@ -154,7 +154,9 @@ def getFilename(event: events.NewMessage.Event):
     return mediaFileName
 
 
+
 in_progress={}
+
 
 async def set_progress(filename, message, received, total):
     global lastUpdate
@@ -164,9 +166,13 @@ async def set_progress(filename, message, received, total):
         try: in_progress.pop(filename)
         except: pass
         return
-    percentage = math.trunc(received / total * 10000) / 100
 
-    progress_message= "{0} % ({1} / {2})".format(percentage, received, total)
+    percentage = (received / total) * 100 
+    progress_length = 14
+    filled_length = int((percentage / 100) * progress_length) 
+    progress_message = 'Downloading..\n' + filename + '\n' + '[' + '█' * filled_length + '░' * (progress_length - filled_length) + ']' + str(round(percentage,2)) + '%'
+
+
     in_progress[filename] = progress_message
 
     currentTime=time.time()
@@ -238,7 +244,7 @@ with TelegramClient(getSession(), api_id, api_hash,
                         message=await event.reply("{0} added to queue".format(filename))
                         await queue.put([event, message])
                 else:
-                    message=await event.reply("That is not downloadable. Try to send it as a file.")
+                    message=await event.reply("That is not downloadable.\nTry to send it as a file.")
 
         except Exception as e:
                 print('Events handler error: ', e)
@@ -266,7 +272,7 @@ with TelegramClient(getSession(), api_id, api_hash,
 
                 await log_reply(
                     message,
-                    "Downloading file {0} ({1} bytes)".format(filename,size)
+                    "Downloading file\n{0} - {1} bytes".format(filename,size)
                 )
 
                 download_callback = lambda received, total: set_progress(filename, message, received, total)
@@ -274,7 +280,7 @@ with TelegramClient(getSession(), api_id, api_hash,
                 await client.download_media(event.message, "{0}/{1}.{2}".format(tempFolder,filename,TELEGRAM_DAEMON_TEMP_SUFFIX), progress_callback = download_callback)
                 set_progress(filename, message, 100, 100)
                 move("{0}/{1}.{2}".format(tempFolder,filename,TELEGRAM_DAEMON_TEMP_SUFFIX), "{0}/{1}".format(downloadFolder,filename))
-                await log_reply(message, "{0} ready".format(filename))
+                await log_reply(message, "{0}\nDownloaded Successfully".format(filename))
 
                 queue.task_done()
             except Exception as e:
