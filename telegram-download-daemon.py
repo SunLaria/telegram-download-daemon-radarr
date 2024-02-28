@@ -125,7 +125,6 @@ async def sendHelloMessage(client, peerChannel):
  
 
 async def log_reply(message, reply):
-    print(reply)
     await message.edit(reply)
 
 def getRandomId(len):
@@ -142,12 +141,6 @@ def getFilename(event: events.NewMessage.Event):
             if isinstance(attribute, DocumentAttributeFilename): 
               mediaFileName=attribute.file_name
               break     
-            if isinstance(attribute, DocumentAttributeVideo):
-              if event.original_update.message.message != '': 
-                  mediaFileName = event.original_update.message.message
-              else:    
-                  mediaFileName = str(event.message.media.document.id)
-              mediaFileName+=guess_extension(event.message.media.document.mime_type)    
      
     mediaFileName="".join(c for c in mediaFileName if c.isalnum() or c in "()._- ")
       
@@ -161,6 +154,7 @@ in_progress={}
 async def set_progress(filename, message, received, total):
     global lastUpdate
     global updateFrequency
+    
 
     if received >= total:
         try: in_progress.pop(filename)
@@ -168,7 +162,7 @@ async def set_progress(filename, message, received, total):
         return
 
     percentage = (received / total) * 100 
-    progress_length = 14
+    progress_length = 10
     filled_length = int((percentage / 100) * progress_length) 
     progress_message = 'Downloading..\n' + filename + '\n' + '[' + '█' * filled_length + '░' * (progress_length - filled_length) + ']' + str(round(percentage,2)) + '%'
 
@@ -191,22 +185,31 @@ with TelegramClient(getSession(), api_id, api_hash,
 
     @client.on(events.NewMessage())
     async def handler(event):
+        global movie_name
 
         if event.to_id != peerChannel:
             return
-
-        print(event)
         
         try:
 
             if not event.media and event.message:
                 command = event.message.message
-                command = command.lower()
                 output = "Unknown command"
-
-                if command == "list":
+                if '(' in command:
+                    try:
+                        movie_name = {}
+                        movie_name['name'] = command.strip()
+                        output = f"The Movie Will Be Renamed to {movie_name['name']}"
+                    except:
+                        output = "Error Getting Movie Name"
+                elif command == "/list":
                     output = subprocess.run(["ls -l "+downloadFolder], shell=True, stdout=subprocess.PIPE,stderr=subprocess.STDOUT).stdout.decode('utf-8')
-                elif command == "status":
+                    try:
+                        if output == "":
+                            output = 'No Files Downloaded Yet'
+                    except:
+                        output = 'No Files Downloaded Yet'
+                elif command == "/status":
                     try:
                         output = "".join([ "{0}: {1}\n".format(key,value) for (key, value) in in_progress.items()])
                         if output: 
@@ -215,10 +218,10 @@ with TelegramClient(getSession(), api_id, api_hash,
                             output = "No active downloads"
                     except:
                         output = "Some error occured while checking the status. Retry."
-                elif command == "clean":
+                elif command == "/clean":
                     output = "Cleaning "+tempFolder+"\n"
                     output+=subprocess.run(["rm "+tempFolder+"/*."+TELEGRAM_DAEMON_TEMP_SUFFIX], shell=True, stdout=subprocess.PIPE,stderr=subprocess.STDOUT).stdout
-                elif command == "queue":
+                elif command == "/queue":
                     try:
                         files_in_queue = []
                         for q in queue.__dict__['_queue']:
@@ -231,13 +234,17 @@ with TelegramClient(getSession(), api_id, api_hash,
                     except:
                         output = "Some error occured while checking the queue. Retry."
                 else:
-                    output = "Available commands: list, status, clean, queue"
+                    output = "Available commands: /list, /status, /clean, /queue"
 
                 await log_reply(event, output)
 
             if event.media:
+                print(event.media)
                 if hasattr(event.media, 'document') or hasattr(event.media,'photo'):
-                    filename=getFilename(event)
+                    try:
+                        filename=getFilename(event)
+                    except:
+                        print('getFilename function error')
                     if ( path.exists("{0}/{1}.{2}".format(tempFolder,filename,TELEGRAM_DAEMON_TEMP_SUFFIX)) or path.exists("{0}/{1}".format(downloadFolder,filename)) ) and duplicates == "ignore":
                         message=await event.reply("{0} already exists. Ignoring it.".format(filename))
                     else:
@@ -250,11 +257,14 @@ with TelegramClient(getSession(), api_id, api_hash,
                 print('Events handler error: ', e)
 
     async def worker():
+        global movie_name
         while True:
             try:
                 element = await queue.get()
                 event=element[0]
                 message=element[1]
+                current_movie_name = movie_name['name']
+                movie_name.clear()
 
                 filename=getFilename(event)
                 fileName, fileExtension = os.path.splitext(filename)
@@ -279,9 +289,14 @@ with TelegramClient(getSession(), api_id, api_hash,
 
                 await client.download_media(event.message, "{0}/{1}.{2}".format(tempFolder,filename,TELEGRAM_DAEMON_TEMP_SUFFIX), progress_callback = download_callback)
                 set_progress(filename, message, 100, 100)
-                move("{0}/{1}.{2}".format(tempFolder,filename,TELEGRAM_DAEMON_TEMP_SUFFIX), "{0}/{1}".format(downloadFolder,filename))
-                await log_reply(message, "{0}\nDownloaded Successfully".format(filename))
-
+                folder_path = os.path.join(downloadFolder, current_movie_name)
+                if not os.path.exists(folder_path):
+                    os.makedirs(folder_path)
+                # Move the file into the folder with the new filename
+                move("{0}/{1}.{2}".format(tempFolder, filename, TELEGRAM_DAEMON_TEMP_SUFFIX), 
+                    "{0}/{1}/{2}".format(downloadFolder, current_movie_name, current_movie_name+fileExtension))
+                await log_reply(message, "{0}\nDownloaded Successfully".format(current_movie_name))
+            
                 queue.task_done()
             except Exception as e:
                 try: await log_reply(message, "Error: {}".format(str(e))) # If it failed, inform the user about it.
