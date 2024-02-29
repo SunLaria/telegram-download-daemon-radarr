@@ -145,7 +145,7 @@ def getFilename(event: events.NewMessage.Event):
     return mediaFileName
 in_progress={}
 
-async def set_progress(filename, message, received, total):
+async def set_progress(filename, message, received, total, current_movie_name):
     global lastUpdate
     global updateFrequency
     
@@ -157,7 +157,7 @@ async def set_progress(filename, message, received, total):
     percentage = (received / total) * 100 
     progress_length = 10
     filled_length = int((percentage / 100) * progress_length) 
-    progress_message = 'Downloading..\n' + filename + '\n' + '[' + '█' * filled_length + '░' * (progress_length - filled_length) + ']' + str(round(percentage,2)) + '%'
+    progress_message = 'Downloading..\n' + current_movie_name + '\n' + filename + '\n' + '[' + '█' * filled_length + '░' * (progress_length - filled_length) + ']' + str(round(percentage,2)) + '%'
 
     in_progress[filename] = progress_message
 
@@ -199,7 +199,7 @@ with TelegramClient(getSession(), api_id, api_hash,
                 
                 elif command == "/status":
                     try:
-                        output = "".join([ "{0}\n".format(value) for (key, value) in in_progress.items()])
+                        output = "".join([ "{0}\n\n".format(value) for (key, value) in in_progress.items()])
                         if output: 
                             output = "Active downloads:\n\n" + output
                         else: 
@@ -207,8 +207,11 @@ with TelegramClient(getSession(), api_id, api_hash,
                     except:
                         output = "Some error occured while checking the status. Retry."
                 elif command == "/clean":
-                    output = "Cleaning "+tempFolder+"\n"
-                    [temp_folder_path for temp_folder_path in [os.path.join(root, file) for root, dirs, files in os.walk(tempFolder) for file in files] if temp_folder_path.endswith('.tdd')]
+                    try:
+                        [os.remove(temp_folder_path) for temp_folder_path in [os.path.join(root, file) for root, dirs, files in os.walk(tempFolder) for file in files] if temp_folder_path.endswith('.tdd')]
+                        output = "Successfully Cleaned Temp Folder"
+                    except:
+                        output = f"Error Cleaning Temp Folder"
                 elif command == "/queue":
                     try:
                         files_in_queue = []
@@ -243,10 +246,8 @@ with TelegramClient(getSession(), api_id, api_hash,
                                 movie_name.clear()
                             else:
                                 message=await event.reply("Failed, Please Provide 'Movie Name (Year)' With The File")
-                                print('messege 1')
                         except:
                             message=await event.reply("Failed, Please Provide 'Movie Name (Year)' With The File")
-                            print('messege 2')
                 
                 else:
                     message=await event.reply("That is not downloadable.\nTry to send it as a file.")
@@ -281,16 +282,19 @@ with TelegramClient(getSession(), api_id, api_hash,
                     "Downloading file\n{0} - {1} bytes".format(filename,size)
                 )
 
-                download_callback = lambda received, total: set_progress(filename, message, received, total)
+                download_callback = lambda received, total: set_progress(filename, message, received, total, current_movie_name)
 
                 await client.download_media(event.message, "{0}/{1}.{2}".format(tempFolder,filename,TELEGRAM_DAEMON_TEMP_SUFFIX), progress_callback = download_callback)
-                set_progress(filename, message, 100, 100)
+                set_progress(filename, message, 100, 100, current_movie_name)
                 folder_path = os.path.join(downloadFolder, current_movie_name)
                 if not os.path.exists(folder_path):
                     os.makedirs(folder_path)
                 # Move the file into the folder with the new filename
+                await log_reply(message, f"Moving..\n {current_movie_name} > {downloadFolder} ")
                 move("{0}/{1}.{2}".format(tempFolder, filename, TELEGRAM_DAEMON_TEMP_SUFFIX), 
                     "{0}/{1}/{2}".format(downloadFolder, current_movie_name, current_movie_name+fileExtension))
+                while not os.path.exists(f"{downloadFolder}/{current_movie_name}/{current_movie_name+fileExtension}"):
+                    pass
                 await log_reply(message, "{0}\nDownloaded Successfully".format(current_movie_name))
             
                 queue.task_done()
