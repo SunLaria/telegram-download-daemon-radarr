@@ -1,4 +1,4 @@
-# telegram-download-daemon-radarr
+# Telegram Download Daemon Radarr
 
 # Changes i Made
 - Added Download Progress Bar.
