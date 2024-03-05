@@ -23,7 +23,7 @@ version: "3"
 services:
   telegram-download-daemon:
     #build:
-    image: randomg1/telegram-download-daemon-mod:1.33
+    image: randomg1/telegram-download-daemon-radarr:2
     container_name: telegram-download
     read_only: true
     environment:
