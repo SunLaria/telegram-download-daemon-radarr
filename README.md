@@ -1,5 +1,11 @@
 # Telegram Download Daemon Radarr
 
+A Telegram Daemon (not a bot) for file downloading automation for channels of which you have admin privileges.
+
+If you have got an Internet connected computer or NAS and you want to automate file downloading from Telegram channels, this daemon is for you.
+
+Telegram bots are limited to 20Mb file size downloads. So I wrote this agent or daemon to allow bigger downloads (limited to 2GB by Telegram APIs).
+
 # Changes i Made
 - Added Download Progress Bar.
 - Added Moving satus on file move to destination.
