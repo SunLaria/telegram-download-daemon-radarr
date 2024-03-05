@@ -19,6 +19,8 @@
 
 # docker-compose
 ```bash
+version: "3"
+services:
   telegram-download-daemon:
     #build:
     image: randomg1/telegram-download-daemon-mod:1.33
