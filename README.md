@@ -2,7 +2,7 @@
 
 # Changes i Made
 - Added Download Progress Bar.
-- Added Moving satus on file move.
+- Added Moving satus on file move to destination.
 - Added Rename To the File.
 
 # Docker Setup:
