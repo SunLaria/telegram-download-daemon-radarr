@@ -6,6 +6,9 @@ If you have got an Linux Server With Radarr and you want to automate file downlo
 
 Telegram bots are limited to 20Mb file size downloads. So this agent or daemon allow bigger downloads (limited to 2GB by Telegram APIs).
 
+It Can look Bugy but it works Perfect
+
+
 # Changes i Made
 - Added Download Progress Bar.
 - Added Moving satus on file move to destination.
