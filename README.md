@@ -57,7 +57,7 @@ $ docker-compose up -d
 
 # How to use with Radarr:
 - Radarr Movie Folder Format Should be "{Movie Title} ({Release Year})"
-- Temp Could be radarr "/downloads"
+- Temp Could be radarr "/downloads" or whatever you want.
 - Destination need to be radarr "/movies"
 - After Telegram Login, restart the server.
 - You should be prompted with a message that the bot is on, on the channel you chose
