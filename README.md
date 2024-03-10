@@ -13,6 +13,7 @@ It Can look Bugy but it works Perfect
 - Added Download Progress Bar.
 - Added Moving satus on file move to destination.
 - Added Rename To the File.
+- Some Functions, Messages Tweaks
 
 # Docker Setup:
 
@@ -25,6 +26,11 @@ It Can look Bugy but it works Perfect
 | `TELEGRAM_DAEMON_CHANNEL`  | `--channel`             | Channel id to download from it (Please, check [Issue 45](https://github.com/alfem/telegram-download-daemon/issues/45), [Issue 48](https://github.com/alfem/telegram-download-daemon/issues/48) and [Issue 73](https://github.com/alfem/telegram-download-daemon/issues/73))                              |                     |
 | `TELEGRAM_DAEMON_DUPLICATES`  | `--duplicates`             | What to do with duplicated files: ignore, overwrite or rename them | rename                     |
 | `TELEGRAM_DAEMON_WORKERS`  | `--workers`             | Number of simultaneous downloads | Equals to processor cores                     |
+
+You can define them as Environment Variables, or put them as a command line arguments, for example:
+
+    python telegram-download-daemon.py --api-id <your-id> --api-hash <your-hash> --channel <channel-number>
+
 
 # docker-compose
 ```bash
