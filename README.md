@@ -32,7 +32,7 @@ version: "3"
 services:
   telegram-download-daemon-radarr:
     #build:
-    image: randomg1/telegram-download-daemon-radarr:2
+    image: randomg1/telegram-download-daemon-radarr:6
     container_name: telegram-download-daemon-radarr
     read_only: true
     environment:
