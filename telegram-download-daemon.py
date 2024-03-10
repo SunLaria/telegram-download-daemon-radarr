@@ -295,6 +295,7 @@ with TelegramClient(getSession(), api_id, api_hash,
                     "{0}/{1}/{2}".format(downloadFolder, current_movie_name, current_movie_name+fileExtension))
                 while not os.path.exists(f"{downloadFolder}/{current_movie_name}/{current_movie_name+fileExtension}"):
                     pass
+                os.chmod(f"{downloadFolder}/{current_movie_name}",0o777)
                 os.chmod(f"{downloadFolder}/{current_movie_name}/{current_movie_name+fileExtension}",0o777)
                 await log_reply(message, "{0}\nDownloaded Successfully".format(current_movie_name))
                 queue.task_done()
