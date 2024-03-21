@@ -6,8 +6,7 @@ If you have got an Linux Server With Radarr and you want to automate file downlo
 
 Telegram bots are limited to 20Mb file size downloads. So this agent or daemon allow bigger downloads (limited to 2GB by Telegram APIs).
 
-It Can look Bugy but it works Perfect
-
+Checkout My New Fork For Sonarr: https://github.com/SunLaria/telegram-download-daemon-sonarr
 
 # Changes i Made
 - Added Download Progress Bar.
@@ -37,7 +36,6 @@ You can define them as Environment Variables, or put them as a command line argu
 version: "3"
 services:
   telegram-download-daemon-radarr:
-    #build:
     image: randomg1/telegram-download-daemon-radarr:6
     container_name: telegram-download-daemon-radarr
     read_only: true
