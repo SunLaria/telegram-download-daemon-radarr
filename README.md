@@ -75,7 +75,7 @@ $ docker compose up -d
 - Forward A File To The Channel, while forwarding you have to provide data about the file:
 - - Movie: `{Movie Title} {Year}`, like "Hot Seat (2022)"
 - - TV Show: `{Series Title} {Year} - S{season:00}E{episode:00}`, like "The Witcher (2019) - S03E02"
-- Without providing data Or the daemon doesn't procced to the download part.
+- Without providing data the daemon doesn't procced to the download part.
 
 
 # Bot Functions:
