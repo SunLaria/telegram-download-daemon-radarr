@@ -5,13 +5,11 @@
 
 from os import getenv, path
 from shutil import move
-import subprocess
-import math
 import time
 import random
 import string
 import os.path
-from mimetypes import guess_extension
+import re
 
 
 from sessionManager import getSession, saveSession
@@ -36,8 +34,9 @@ TELEGRAM_DAEMON_CHANNEL = getenv("TELEGRAM_DAEMON_CHANNEL")
 
 TELEGRAM_DAEMON_SESSION_PATH = getenv("TELEGRAM_DAEMON_SESSION_PATH")
 
-TELEGRAM_DAEMON_DEST=getenv("TELEGRAM_DAEMON_DEST", "/telegram-downloads")
-TELEGRAM_DAEMON_TEMP=getenv("TELEGRAM_DAEMON_TEMP", "")
+TELEGRAM_DAEMON_MOVIES_DEST=getenv("TELEGRAM_DAEMON_MOVIES_DEST", "/movies")
+TELEGRAM_DAEMON_TVSHOWS_DEST=getenv("TELEGRAM_DAEMON_TVSHOWS_DEST","/tvshows")
+TELEGRAM_DAEMON_TEMP=getenv("TELEGRAM_DAEMON_TEMP", "/downloads")
 TELEGRAM_DAEMON_DUPLICATES=getenv("TELEGRAM_DAEMON_DUPLICATES", "rename")
 
 TELEGRAM_DAEMON_TEMP_SUFFIX="tdd"
@@ -45,7 +44,7 @@ TELEGRAM_DAEMON_TEMP_SUFFIX="tdd"
 TELEGRAM_DAEMON_WORKERS=getenv("TELEGRAM_DAEMON_WORKERS", multiprocessing.cpu_count())
 
 parser = argparse.ArgumentParser(
-    description="Script to download files from a Telegram Channel.")
+    description="Script to download files from a Telegram Channel to Sonarr/Radarr.")
 parser.add_argument(
     "--api-id",
     required=TELEGRAM_DAEMON_API_ID == None,
@@ -62,25 +61,33 @@ parser.add_argument(
     help=
     'api_hash from https://core.telegram.org/api/obtaining_api_id (default is TELEGRAM_DAEMON_API_HASH env var)'
 )
+
 parser.add_argument(
-    "--dest",
+    "--moviesdest",
     type=str,
-    default=TELEGRAM_DAEMON_DEST,
+    default=TELEGRAM_DAEMON_MOVIES_DEST,
     help=
-    'Destination path for downloaded files (default is /telegram-downloads).')
+    'Destination path for Radarr media files (default is /movies).')
+
+parser.add_argument(
+    "--tvshowsdest",
+    type=str,
+    default=TELEGRAM_DAEMON_TVSHOWS_DEST,
+    help=
+    'Destination path for Sonarr media files (default is /tvshows).')
 parser.add_argument(
     "--temp",
     type=str,
     default=TELEGRAM_DAEMON_TEMP,
     help=
-    'Destination path for temporary files (default is using the same downloaded files directory).')
+    'Destination path for temporary files (default is /downloads).')
 parser.add_argument(
     "--channel",
     required=TELEGRAM_DAEMON_CHANNEL == None,
     type=int,
     default=TELEGRAM_DAEMON_CHANNEL,
     help=
-    'Channel id to download from it (default is TELEGRAM_DAEMON_CHANNEL env var'
+    'Channel id to download from it (default is TELEGRAM_DAEMON_CHANNEL env var)'
 )
 parser.add_argument(
     "--duplicates",
@@ -102,15 +109,14 @@ args = parser.parse_args()
 api_id = args.api_id
 api_hash = args.api_hash
 channel_id = args.channel
-downloadFolder = args.dest
+moviesDest = args.moviesdest
+tvshowsDest = args.tvshowsdest
 tempFolder = args.temp
 duplicates=args.duplicates
 worker_count = args.workers
 updateFrequency = 10
 lastUpdate = 0
 
-if not tempFolder:
-    tempFolder = downloadFolder
    
 # Edit these lines:
 proxy = None
@@ -130,7 +136,7 @@ async def log_reply(message, reply):
 def getRandomId(len):
     chars=string.ascii_lowercase + string.digits
     return  ''.join(random.choice(chars) for x in range(len))
- 
+
 def getFilename(event: events.NewMessage.Event):
     mediaFileName = "unknown"
 
@@ -145,7 +151,7 @@ def getFilename(event: events.NewMessage.Event):
     return mediaFileName
 in_progress={}
 
-async def set_progress(filename, message, received, total, current_movie_name):
+async def set_progress(filename, message, received, total, current_tv_show):
     global lastUpdate
     global updateFrequency
     
@@ -157,7 +163,7 @@ async def set_progress(filename, message, received, total, current_movie_name):
     percentage = (received / total) * 100 
     progress_length = 10
     filled_length = int((percentage / 100) * progress_length) 
-    progress_message = 'Downloading..\n' + current_movie_name + '\n' + filename + '\n' + '[' + '█' * filled_length + '░' * (progress_length - filled_length) + ']' + str(round(percentage,2)) + '%'
+    progress_message = 'Downloading..\n' + current_tv_show + '\n' + filename + '\n' + '[' + '█' * filled_length + '░' * (progress_length - filled_length) + ']' + str(round(percentage,2)) + '%'
 
     in_progress[filename] = progress_message
 
@@ -166,7 +172,7 @@ async def set_progress(filename, message, received, total, current_movie_name):
         await log_reply(message, progress_message)
         lastUpdate=currentTime
 
-movie_name={}
+temp={}
 
 with TelegramClient(getSession(), api_id, api_hash,
                     proxy=proxy).start() as client:
@@ -178,7 +184,7 @@ with TelegramClient(getSession(), api_id, api_hash,
 
     @client.on(events.NewMessage())
     async def handler(event):
-        global movie_name
+        global temp
         
 
         if event.to_id != peerChannel:
@@ -189,17 +195,28 @@ with TelegramClient(getSession(), api_id, api_hash,
             if not event.media and event.message:
                 command = event.message.message
                 output = "Unknown command"
-                if '(' in command:
+                tvshow_match = re.match(r'^([^{}]*)\s*\((\d{4})\)\s*-\s*S(\d{2})E(\d{2})$',command)
+                movie_match = re.match(r'^([\w\s]+) \((\d{4})\)$',command)
+                if tvshow_match and not movie_match:
                     try:
-                        movie_name = {}
-                        movie_name['name'] = command.strip()
-                        output = f"The Movie Will Be Renamed to {movie_name['name']}"
+                        temp = {}
+                        temp['data'] = {"title": tvshow_match.group(1).strip(),"year": int(tvshow_match.group(2)),"season": tvshow_match.group(3).strip(),"episode": tvshow_match.group(4).strip(), "type":"tvshow"}
+                        
+                        output = f"The Tv Show Will Be Renamed to {command}"
                     except:
-                        output = "Error Getting Movie Name"
-                
+                        output = "Error Getting Tv Show Data From User, use 'Series Title (2022) - S01E01' Format"
+                elif movie_match and not tvshow_match:
+                    try:
+                        temp = {}
+                        temp['data'] = {"title": movie_match.group(1).strip(),"year": movie_match.group(2), "type":"movie"}
+                        output = f"The Movie Will Be Renamed to {command}"
+                    except:
+                        output = "Error Getting Movie Data From User, use 'Movie Title (2022)' Format"
+                elif movie_match and tvshow_match:
+                    output = "Error Getting File Data From User"
                 elif command == "/status":
                     try:
-                        output = "".join([ "{0}\n\n".format(value) for (key, value) in in_progress.items()])
+                        output = "".join([ f"{value}\n\n" for (key, value) in in_progress.items()])
                         if output: 
                             output = "Active downloads:\n\n" + output
                         else: 
@@ -217,7 +234,7 @@ with TelegramClient(getSession(), api_id, api_hash,
                         files_in_queue = []
                         for q in queue.__dict__['_queue']:
                             files_in_queue.append(q[2])
-                        output = "".join([ "{0}\n".format(filename) for (filename) in files_in_queue])
+                        output = "".join([ f"{filename}\n" for (filename) in files_in_queue])
                         if output: 
                             output = "Files in queue:\n\n" + output
                         else: 
@@ -230,24 +247,23 @@ with TelegramClient(getSession(), api_id, api_hash,
                 await log_reply(event, output)
 
             if event.media:
-                print(event.media)
                 if hasattr(event.media, 'document') or hasattr(event.media,'photo'):
                     try:
                         filename=getFilename(event)
                     except:
                         print('getFilename function error')
-                    if ( path.exists("{0}/{1}.{2}".format(tempFolder,filename,TELEGRAM_DAEMON_TEMP_SUFFIX)) or path.exists("{0}/{1}".format(downloadFolder,filename)) ) and duplicates == "ignore":
-                        message=await event.reply("{0} already exists. Ignoring it.".format(filename))
+                    if path.exists(f"{tempFolder}/{filename}.{TELEGRAM_DAEMON_TEMP_SUFFIX}") and duplicates == "ignore":
+                        message=await event.reply(f"{filename} Already Dowloading. Ignoring it.")
                     else:
                         try:
-                            if movie_name.get('name')!=-1:
-                                message=await event.reply("{0} added to queue".format(filename))
-                                await queue.put([event, message,movie_name['name']])
-                                movie_name.clear()
+                            if temp.get('data',-1)!=-1:
+                                message=await event.reply(f"{filename} Added To Queue")
+                                await queue.put([event, message,temp['data']])
+                                temp.clear()
                             else:
-                                message=await event.reply("Failed, Please Provide 'Movie Name (Year)' With The File")
+                                message=await event.reply("Failed, Please Provide any data With The File")
                         except:
-                            message=await event.reply("Failed, Please Provide 'Movie Name (Year)' With The File")
+                            message=await event.reply("Failed, Please Provide any data With The File")
                 
                 else:
                     message=await event.reply("That is not downloadable.\nTry to send it as a file.")
@@ -256,22 +272,28 @@ with TelegramClient(getSession(), api_id, api_hash,
             print('Events handler error: ', e)
 
     async def worker():
-        global movie_name
         while True:
             try:
                 element = await queue.get()
                 event=element[0]
                 message=element[1]
-                current_movie_name = element[2]
-                                
+                file_data = element[2]
+                if file_data['type'] == "tvshow":
+                    tvshow_data = f"{file_data['title']} ({file_data['year']}) - S{file_data['season']}E{file_data['episode']}"
+                    tvshow_folder_name = f"{file_data['title']} ({file_data['year']})"
+                    tvshow_season_folder = f"Season {int(file_data['season'])}"
+                    new_tvshow_filename = f"{file_data['title']} - S{file_data['season']}E{file_data['episode']}"
+                
+                if file_data['type'] == "movie":
+                    movie_data = f"{file_data['title']} ({file_data['year']})"
+
                 filename=getFilename(event)
                 fileName, fileExtension = os.path.splitext(filename)
                 tempfilename=fileName+"-"+getRandomId(8)+fileExtension
 
-                if path.exists("{0}/{1}.{2}".format(tempFolder,tempfilename,TELEGRAM_DAEMON_TEMP_SUFFIX)) or path.exists("{0}/{1}".format(downloadFolder,filename)):
-                    if duplicates == "rename":
-                       filename=tempfilename
- 
+                if path.exists(f"{tempFolder}/{filename}.{TELEGRAM_DAEMON_TEMP_SUFFIX}") and duplicates == "rename":
+                    filename=tempfilename
+
                 if hasattr(event.media, 'photo'):
                    size = 0
                 else: 
@@ -279,28 +301,57 @@ with TelegramClient(getSession(), api_id, api_hash,
 
                 await log_reply(
                     message,
-                    "Downloading file\n{0} - {1} bytes".format(filename,size)
+                    f"Downloading file\n{filename} - {size} bytes"
                 )
+                if file_data['type'] == "tvshow":
+                    download_callback = lambda received, total: set_progress(filename, message, received, total, tvshow_data)
 
-                download_callback = lambda received, total: set_progress(filename, message, received, total, current_movie_name)
+                    await client.download_media(event.message, f"{tempFolder}/{filename}.{TELEGRAM_DAEMON_TEMP_SUFFIX}", progress_callback = download_callback)
+                    set_progress(filename, message, 100, 100, tvshow_data)
+                    #  check if tvshow folder exists, else creates folder
+                    tvshow_folder_path = os.path.join(tvshowsDest, tvshow_folder_name)
+                    if not os.path.exists(tvshow_folder_path):
+                        os.makedirs(tvshow_folder_path)
+                    # check if tvshow sesson folder exists, else creates sesson folder
+                    tvshow_season_folder_path = os.path.join(tvshowsDest, tvshow_folder_name, tvshow_season_folder)
+                    if not os.path.exists(tvshow_season_folder_path):
+                        os.makedirs(tvshow_season_folder_path)
+                    # Move the file into the specific folder with the new filename
+                    await log_reply(message, f"Moving..\n {tvshow_data} > {tvshowsDest} ")
+                    move(f"{tempFolder}/{filename}.{TELEGRAM_DAEMON_TEMP_SUFFIX}", 
+                        f"{tvshowsDest}/{tvshow_folder_name}/{tvshow_season_folder}/{new_tvshow_filename+fileExtension.lower()}")
+                    while not os.path.exists(f"{tvshowsDest}/{tvshow_folder_name}/{tvshow_season_folder}/{new_tvshow_filename+fileExtension}"):
+                        pass
+                    # give permissions to files
+                    os.chmod(f"{tvshowsDest}/{tvshow_folder_name}",0o777)
+                    os.chmod(f"{tvshowsDest}/{tvshow_folder_name}/{tvshow_season_folder}",0o777)
+                    os.chmod(f"{tvshowsDest}/{tvshow_folder_name}/{tvshow_season_folder}/{new_tvshow_filename+fileExtension}",0o777)
+                    await log_reply(message, f"{tvshow_data}\nDownloaded Successfully")
+                    queue.task_done()
+                
+                if file_data['type'] == "movie":
+                    download_callback = lambda received, total: set_progress(filename, message, received, total, movie_data)
 
-                await client.download_media(event.message, "{0}/{1}.{2}".format(tempFolder,filename,TELEGRAM_DAEMON_TEMP_SUFFIX), progress_callback = download_callback)
-                set_progress(filename, message, 100, 100, current_movie_name)
-                folder_path = os.path.join(downloadFolder, current_movie_name)
-                if not os.path.exists(folder_path):
-                    os.makedirs(folder_path)
-                # Move the file into the folder with the new filename
-                await log_reply(message, f"Moving..\n {current_movie_name} > {downloadFolder} ")
-                move("{0}/{1}.{2}".format(tempFolder, filename, TELEGRAM_DAEMON_TEMP_SUFFIX), 
-                    "{0}/{1}/{2}".format(downloadFolder, current_movie_name, current_movie_name+fileExtension))
-                while not os.path.exists(f"{downloadFolder}/{current_movie_name}/{current_movie_name+fileExtension}"):
-                    pass
-                os.chmod(f"{downloadFolder}/{current_movie_name}",0o777)
-                os.chmod(f"{downloadFolder}/{current_movie_name}/{current_movie_name+fileExtension}",0o777)
-                await log_reply(message, "{0}\nDownloaded Successfully".format(current_movie_name))
-                queue.task_done()
+                    await client.download_media(event.message, f"{tempFolder}/{filename}.{TELEGRAM_DAEMON_TEMP_SUFFIX}", progress_callback = download_callback)
+                    set_progress(filename, message, 100, 100, movie_data)
+                    #  check if tvshow folder exists, else creates folder
+                    folder_path = os.path.join(moviesDest, movie_data)
+                    if not os.path.exists(folder_path):
+                        os.makedirs(folder_path)
+                    # Move the file into the specific folder with the new filename
+                    await log_reply(message, f"Moving..\n {movie_data} > {moviesDest} ")
+                    move(f"{tempFolder}/{filename}.{TELEGRAM_DAEMON_TEMP_SUFFIX}", 
+                        f"{moviesDest}/{movie_data}/{movie_data+fileExtension.lower()}")
+                    while not os.path.exists(f"{moviesDest}/{movie_data}/{movie_data+fileExtension}"):
+                        pass
+                    # give permissions to files
+                    os.chmod(f"{moviesDest}/{movie_data}",0o777)
+                    os.chmod(f"{moviesDest}/{movie_data}/{movie_data+fileExtension}",0o777)
+                    await log_reply(message, f"{movie_data}\nDownloaded Successfully")
+                    queue.task_done()
+
             except Exception as e:
-                try: await log_reply(message, "Error: {}".format(str(e))) # If it failed, inform the user about it.
+                try: await log_reply(message, f"Error: {str(e)}") # If it failed, inform the user about it.
                 except: pass
                 print('Queue worker error: ', e)
  
