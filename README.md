@@ -64,7 +64,7 @@ $ docker compose run --rm telegram-download-daemon-radarr
 $ docker compose up -d
 ```
 
-# How to use with Sonarr:
+# How to use with Radarr/ Sonarr:
 - Sonarr Standard Episode Format MUST be `{Series Title} - S{season:00}E{episode:00}`.
 - Radarr Movie Folder Format MUST be `{Movie Title} ({Release Year})`.
 - Temp Could be Sonarr "/downloads" or whatever you want.
