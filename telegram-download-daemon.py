@@ -156,7 +156,10 @@ def fix_year_format(input_str):
     if match_parentheses_right:
         year = match_parentheses_right.group(1)
         output = re.sub(r'(\d{4})', f'({year}', input_str)
-    return output.strip(" ")
+    if output:
+        return output.strip(" ")
+    else:
+        raise ValueError("Couldn't Procces String")
 
 
 def getFilename(event: events.NewMessage.Event):
@@ -167,8 +170,8 @@ def getFilename(event: events.NewMessage.Event):
     elif hasattr(event.media, 'document'):
         for attribute in event.media.document.attributes:
             if isinstance(attribute, DocumentAttributeFilename): 
-              mediaFileName=attribute.file_name
-              break     
+                mediaFileName=attribute.file_name
+                break
     mediaFileName="".join(c for c in mediaFileName if c.isalnum() or c in "()._- ")
     return mediaFileName
 in_progress={}
@@ -208,33 +211,63 @@ with TelegramClient(getSession(), api_id, api_hash,
     async def handler(event):
         global temp
         
-
+        
         if event.to_id != peerChannel:
-            return
+            return 
         
         try:
-            if not event.media and event.message:
+            if event.media and (hasattr(event.media, 'document') or hasattr(event.media, 'photo')):
+                filename = getFilename(event)
+                print(filename)
+                if path.exists(f"{tempFolder}/{filename}.{TELEGRAM_DAEMON_TEMP_SUFFIX}") and duplicates == "ignore":
+                    message = await event.reply(f"{filename} is already downloading. Ignoring it.")
+                else:
+                    temp.clear()
+                    temp['filename'] = filename
+                    temp['event'] = event
+                    message = await event.reply("Please, Provide The File Data.")
+            else:
                 command = event.message.message
-                output = "Unknown command"
-                if re.search(r'(\d{4})', command):
-                    tvshow_match = re.match(r'^([^{}]*)\s*\((\d{4})\)\s*-\s*S(\d{1,5})E(\d{1,5})$',fix_year_format(command), re.IGNORECASE)
-                    movie_match = re.match(r'^([\w\s]+) \((\d{4})\)$',fix_year_format(command), re.IGNORECASE)
+                # output = "Unknown command"
+                if re.search(r'(\d{4})', command) and len(temp.keys())==2 and len(command)>4 :
+                    try:
+                        tvshow_match = re.match(r'^([^{}]*)\s*\((\d{4})\)\s*-\s*S(\d{1,5})E(\d{1,5})$',fix_year_format(command), re.IGNORECASE)
+                        movie_match = re.match(r'^([\w\s]+) \((\d{4})\)$',fix_year_format(command), re.IGNORECASE)
+                    except:
+                        output="Error, Send File Data Again"
+
                     if tvshow_match and not movie_match:
                         try:
-                            temp = {}
                             temp['data'] = {"title": tvshow_match.group(1).strip(" "),"year": int(tvshow_match.group(2)),"season": tvshow_match.group(3).zfill(2),"episode": tvshow_match.group(4).zfill(2), "type":"tvshow"}
                             output = f"The Tv Show Will Be Renamed to {command}"
                         except:
-                            output = "Error Getting Tv Show Data From User, use 'Series Title (2022) - S01E01' Format"
+                            output="Error, Send File Data Again"
                     elif movie_match and not tvshow_match:
                         try:
-                            temp = {}
                             temp['data'] = {"title": movie_match.group(1).strip(" "),"year": int(movie_match.group(2)), "type":"movie"}
                             output = f"The Movie Will Be Renamed to {command}"
                         except:
-                            output = "Error Getting Movie Data From User, use 'Movie Title (2022)' Format"
-                    elif movie_match and tvshow_match:
-                        output = "Error Getting File Data From User"
+                            output="Error, Send File Data Again"
+                    else:
+                        output="Error, Send File Data Again"
+
+                    if temp.get('event',-1)!=-1 and temp.get('data',-1)!=-1:
+                        message=await event.reply(f"{temp['filename']} Added To Queue")
+                        await queue.put([temp['event'], message,temp['data']])
+                        temp.clear()
+                    else:
+                        output="Error, Send File Data Again"
+
+                elif len(temp.keys())==2 and temp.get('data',-1)==-1 and command!='/cancel':
+                    output="Error, Send File Data Again"
+
+                elif command == "/cancel":
+                    try:
+                        temp.clear()
+                        if len(temp.keys())==0: 
+                            output = "Current Operation Canceled."
+                    except:
+                        output = "Some error occured while canceling current operation. Retry."
                 elif command == "/status":
                     try:
                         output = "".join([ f"{value}\n\n" for (key, value) in in_progress.items()])
@@ -263,34 +296,16 @@ with TelegramClient(getSession(), api_id, api_hash,
                     except:
                         output = "Some error occured while checking the queue. Retry."
                 else:
-                    output = "Available commands: /status, /clean, /queue"
+                    output = "First Send A File.\nAvailable commands: /cancel, /status, /clean, /queue"
 
                 await log_reply(event, output)
 
-            if event.media:
-                if hasattr(event.media, 'document') or hasattr(event.media,'photo'):
-                    try:
-                        filename=getFilename(event)
-                    except:
-                        print('getFilename function error')
-                    if path.exists(f"{tempFolder}/{filename}.{TELEGRAM_DAEMON_TEMP_SUFFIX}") and duplicates == "ignore":
-                        message=await event.reply(f"{filename} Already Dowloading. Ignoring it.")
-                    else:
-                        try:
-                            if temp.get('data',-1)!=-1:
-                                message=await event.reply(f"{filename} Added To Queue")
-                                await queue.put([event, message,temp['data']])
-                                temp.clear()
-                            else:
-                                message=await event.reply("Failed, Please Provide any data With The File")
-                        except:
-                            message=await event.reply("Failed, Please Provide any data With The File")
-                
-                else:
-                    message=await event.reply("That is not downloadable.\nTry to send it as a file.")
-
         except Exception as e:
+            output="Error, Send File Data Again"
+            await log_reply(event, output)
             print('Events handler error: ', e)
+
+
 
     async def worker():
         while True:
