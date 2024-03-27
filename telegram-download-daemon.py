@@ -137,6 +137,28 @@ def getRandomId(len):
     chars=string.ascii_lowercase + string.digits
     return  ''.join(random.choice(chars) for x in range(len))
 
+def fix_year_format(input_str):
+    tvshow_check = re.search(r'-\s*S(\d{1,5})E(\d{1,5})$', input_str, re.IGNORECASE)
+    if not tvshow_check:
+        input_str+=" "
+    match_with_parentheses  = re.search(r' \((\d{4})\) ', input_str)
+    if match_with_parentheses:
+        output = input_str
+    match_without_parentheses = re.search(r' (\d{4}) ', input_str)
+    if match_without_parentheses:
+        year = match_without_parentheses.group(1)
+        output = re.sub(r'(\d{4})', f'({year})', input_str)
+    match_parentheses_left = re.search(r' \((\d{4}) ', input_str)
+    if match_parentheses_left:
+        year = match_parentheses_left.group(1)
+        output = re.sub(r'(\d{4})', f'{year})', input_str)
+    match_parentheses_right = re.search(r' (\d{4})\) ', input_str)
+    if match_parentheses_right:
+        year = match_parentheses_right.group(1)
+        output = re.sub(r'(\d{4})', f'({year}', input_str)
+    return output.strip(" ")
+
+
 def getFilename(event: events.NewMessage.Event):
     mediaFileName = "unknown"
 
@@ -191,29 +213,28 @@ with TelegramClient(getSession(), api_id, api_hash,
             return
         
         try:
-
             if not event.media and event.message:
                 command = event.message.message
                 output = "Unknown command"
-                tvshow_match = re.match(r'^([^{}]*)\s*\((\d{4})\)\s*-\s*S(\d{2})E(\d{2})$',command)
-                movie_match = re.match(r'^([\w\s]+) \((\d{4})\)$',command)
-                if tvshow_match and not movie_match:
-                    try:
-                        temp = {}
-                        temp['data'] = {"title": tvshow_match.group(1).strip(),"year": int(tvshow_match.group(2)),"season": tvshow_match.group(3).strip(),"episode": tvshow_match.group(4).strip(), "type":"tvshow"}
-                        
-                        output = f"The Tv Show Will Be Renamed to {command}"
-                    except:
-                        output = "Error Getting Tv Show Data From User, use 'Series Title (2022) - S01E01' Format"
-                elif movie_match and not tvshow_match:
-                    try:
-                        temp = {}
-                        temp['data'] = {"title": movie_match.group(1).strip(),"year": movie_match.group(2), "type":"movie"}
-                        output = f"The Movie Will Be Renamed to {command}"
-                    except:
-                        output = "Error Getting Movie Data From User, use 'Movie Title (2022)' Format"
-                elif movie_match and tvshow_match:
-                    output = "Error Getting File Data From User"
+                if re.search(r'(\d{4})', command):
+                    tvshow_match = re.match(r'^([^{}]*)\s*\((\d{4})\)\s*-\s*S(\d{1,5})E(\d{1,5})$',fix_year_format(command), re.IGNORECASE)
+                    movie_match = re.match(r'^([\w\s]+) \((\d{4})\)$',fix_year_format(command), re.IGNORECASE)
+                    if tvshow_match and not movie_match:
+                        try:
+                            temp = {}
+                            temp['data'] = {"title": tvshow_match.group(1).strip(" "),"year": int(tvshow_match.group(2)),"season": tvshow_match.group(3).zfill(2),"episode": tvshow_match.group(4).zfill(2), "type":"tvshow"}
+                            output = f"The Tv Show Will Be Renamed to {command}"
+                        except:
+                            output = "Error Getting Tv Show Data From User, use 'Series Title (2022) - S01E01' Format"
+                    elif movie_match and not tvshow_match:
+                        try:
+                            temp = {}
+                            temp['data'] = {"title": movie_match.group(1).strip(" "),"year": int(movie_match.group(2)), "type":"movie"}
+                            output = f"The Movie Will Be Renamed to {command}"
+                        except:
+                            output = "Error Getting Movie Data From User, use 'Movie Title (2022)' Format"
+                    elif movie_match and tvshow_match:
+                        output = "Error Getting File Data From User"
                 elif command == "/status":
                     try:
                         output = "".join([ f"{value}\n\n" for (key, value) in in_progress.items()])
