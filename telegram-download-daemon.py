@@ -228,7 +228,7 @@ with TelegramClient(getSession(), api_id, api_hash,
                     message = await event.reply("Please, Provide The File Data.")
             else:
                 command = event.message.message
-                # output = "Unknown command"
+                output = "Unknown command"
                 if re.search(r'(\d{4})', command) and len(temp.keys())==2 and len(command)>4 :
                     try:
                         tvshow_match = re.match(r'^([^{}]*)\s*\((\d{4})\)\s*-\s*S(\d{1,5})E(\d{1,5})$',fix_year_format(command), re.IGNORECASE)
