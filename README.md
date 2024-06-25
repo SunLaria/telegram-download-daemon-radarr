@@ -30,7 +30,7 @@ python telegram-download-daemon.py --api-id <your-id> --api-hash <your-hash> --c
 version: "4"
 services:
   telegram-download-daemon-radarr-sonarr:
-    image: docker.io/randomg1/telegram-download-daemon-radarr-sonarr:latest
+    image: docker.io/randomg1/telegram-download-daemon-radarr-sonarr:beta
     container_name: telegram-download-daemon-radarr-sonarr
     read_only: true
     environment:
@@ -72,7 +72,7 @@ $ docker compose up -d
 - After Telegram Login, restart the server.
 - You should be prompted with a message that the bot is on, on the channel you chose
 - Currently You Need To Manually Add The Movie, TV Show To Radarr, Sonarr Catalogs.
-- Forward A File To The Channel, while forwarding you have to provide data about the file.
+- Forward A File To The Channel, You will be prompted by the bot to provide data about the file until its achieved, else use /cancel to cancel the operation of downloading the file.
 - File Data Provided from the user is now more Dynamic:
 - - Movie: `{Movie Title} {Year}`, like "Hot Seat (2022)", Hot Seat 2022"
 - - TV Show: `{Series Title} {Year} - S{season:00}E{episode:00}`, like "The Witcher (2019) - S03E02", "The Witcher 2019 - S03E02", "The Witcher 2019 - s3e2", "The Witcher 2019 - s20e120".
