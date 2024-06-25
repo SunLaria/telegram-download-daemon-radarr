@@ -1,7 +1,7 @@
 version: "4"
 services:
   telegram-download-daemon-radarr-sonarr:
-    image: docker.io/randomg1/telegram-download-daemon-radarr-sonarr:latest
+    image: docker.io/randomg1/telegram-download-daemon-radarr-sonarr:beta
     container_name: telegram-download-daemon-radarr-sonarr
     read_only: true
     environment:
